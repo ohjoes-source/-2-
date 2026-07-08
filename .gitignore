@@ -1,0 +1,7 @@
+webapp/uploads/
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.xlsx
+*.xls

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "공사비검토 웹앱",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "--with", "flask", "--with", "openpyxl", "--directory", "webapp", "python", "app.py"],
+      "port": 5000
+    }
+  ]
+}

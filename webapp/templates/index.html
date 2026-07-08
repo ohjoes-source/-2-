@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>공사비 비교</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'맑은 고딕',sans-serif;background:#f0f2f5;color:#222;font-size:15px}
+.top-nav{background:#1f3864;display:flex;align-items:center;padding:0 28px;height:56px}
+.top-nav .logo{color:#fff;font-size:17px;font-weight:700}
+.card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.1);padding:28px;margin:24px}
+.card-title{font-size:16px;font-weight:700;color:#1f3864;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #e5eaf2}
+/* 파일 그룹 */
+.file-groups{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}
+.file-group{border-radius:8px;padding:18px;border:2px solid}
+.file-group.base{border-color:#1f3864;background:#f0f4fc}
+.file-group.comp{border-color:#c55a11;background:#fdf4ee}
+.grp-label{font-weight:700;margin-bottom:12px;font-size:14px}
+.file-group.base .grp-label{color:#1f3864}
+.file-group.comp .grp-label{color:#c55a11}
+.drop-zone{border:2px dashed #c0cde0;border-radius:8px;padding:28px 20px;text-align:center;cursor:pointer;transition:all .15s;background:#f8fafd}
+.drop-zone:hover,.drop-zone.over{border-color:#1f3864;background:#eef3fb}
+.drop-zone input{display:none}
+.drop-icon{font-size:36px;margin-bottom:8px;opacity:.6}
+.drop-text{font-size:14px;color:#555}
+.drop-hint{color:#999;font-size:12px;margin-top:6px}
+.file-name{margin-top:10px;font-size:14px;font-weight:700;color:#1f3864}
+.sheet-row{display:flex;align-items:center;gap:10px;margin-top:14px}
+.sheet-row label{font-size:13px;font-weight:600;color:#555;white-space:nowrap}
+.sheet-row select{flex:1;padding:8px 10px;border:1px solid #c0cde0;border-radius:6px;font-size:14px}
+/* 버튼 */
+.btn{padding:11px 26px;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:700;transition:all .15s}
+.btn-primary{background:#1f3864;color:#fff}.btn-primary:hover{background:#163060}
+.btn-dl{background:#1a6b3a;color:#fff}.btn-dl:hover{background:#145630}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.action-bar{display:flex;align-items:center;gap:14px;margin-bottom:20px;flex-wrap:wrap}
+.summary-chips{display:flex;gap:10px;margin-left:auto}
+.chip{padding:6px 16px;border-radius:20px;font-size:13px;font-weight:700;color:#fff}
+.chip.match{background:#2e7d32}.chip.add{background:#1565c0}.chip.del{background:#c55a11}
+/* 테이블 */
+.tbl-wrap{overflow-x:auto;border-radius:8px;border:1px solid #c8d4e8}
+table{border-collapse:collapse;width:100%;min-width:960px}
+thead{position:sticky;top:0;z-index:5}
+thead tr.grp-header th{padding:10px 10px;text-align:center;color:#fff;white-space:nowrap;font-size:13px}
+thead tr.sub-header th{padding:7px 10px;text-align:center;color:#fff;font-size:12px;white-space:nowrap}
+tbody tr:hover{filter:brightness(.96)}
+td{padding:9px 12px;border-bottom:1px solid #e0e8f4;vertical-align:middle;font-size:13px;white-space:nowrap}
+td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:'Courier New',monospace;font-size:13px;letter-spacing:-.3px}
+td.center{text-align:center}
+td.name-cell{white-space:normal;min-width:220px;max-width:360px;word-break:break-all;font-size:13px}
+.lv1 td{font-size:14px}.lv1 td.name-cell{font-weight:800}
+.lv2 td.name-cell{font-weight:700;padding-left:18px}
+.lv3 td.name-cell{padding-left:36px;font-weight:400}
+tr.row-add td{background:#dbeafe}
+tr.row-del td{background:#fef3c7}
+tr.row-up  td{background:#dcfce7}
+tr.row-dn  td{background:#fee2e2}
+tr.row-eq  td{background:#f9fafb}
+tfoot tr td{background:#dbeafe;font-weight:700;font-size:14px}
+.badge{display:inline-block;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:700;color:#fff}
+.badge-add{background:#1d4ed8}.badge-del{background:#c55a11}
+.neg{color:#b91c1c;font-weight:700}.pos{color:#166534;font-weight:700}
+@media(max-width:720px){.file-groups{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="top-nav">
+  <div class="logo">📋 공사비 비교 검토</div>
+</div>
+
+<div class="card">
+  <div class="card-title">두 내역서 엑셀 1대1 비교</div>
+
+  <div class="file-groups">
+    <div class="file-group base">
+      <div class="grp-label">① 기준 내역서</div>
+      <div class="drop-zone" id="dz1"
+           onclick="document.getElementById('f1').click()"
+           ondragover="dzOver(event,'1')" ondragleave="dzLeave('1')" ondrop="dzDrop(event,'1')">
+        <input type="file" id="f1" accept=".xlsx,.xls" onchange="onFileChange(1,this)">
+        <div class="drop-icon">📘</div>
+        <div class="drop-text">파일을 드래그하거나 클릭하여 선택</div>
+        <div class="drop-hint">.xlsx / .xls</div>
+        <div class="file-name" id="fn1"></div>
+      </div>
+      <div class="sheet-row">
+        <label>시트 선택</label>
+        <select id="sh1" disabled><option>— 파일을 먼저 업로드 —</option></select>
+      </div>
+    </div>
+
+    <div class="file-group comp">
+      <div class="grp-label">② 비교 내역서</div>
+      <div class="drop-zone" id="dz2"
+           onclick="document.getElementById('f2').click()"
+           ondragover="dzOver(event,'2')" ondragleave="dzLeave('2')" ondrop="dzDrop(event,'2')">
+        <input type="file" id="f2" accept=".xlsx,.xls" onchange="onFileChange(2,this)">
+        <div class="drop-icon">📙</div>
+        <div class="drop-text">파일을 드래그하거나 클릭하여 선택</div>
+        <div class="drop-hint">.xlsx / .xls</div>
+        <div class="file-name" id="fn2"></div>
+      </div>
+      <div class="sheet-row">
+        <label>시트 선택</label>
+        <select id="sh2" disabled><option>— 파일을 먼저 업로드 —</option></select>
+      </div>
+    </div>
+  </div>
+
+  <div class="action-bar">
+    <button class="btn btn-primary" id="btn-compare" onclick="runCompare()" disabled>▶ 비교 실행</button>
+    <button class="btn btn-dl" id="btn-dl" onclick="downloadExcel()" disabled>⬇ 엑셀 다운로드</button>
+    <div class="summary-chips" id="chips" style="display:none">
+      <span class="chip match" id="chip-m"></span>
+      <span class="chip add"   id="chip-a"></span>
+      <span class="chip del"   id="chip-d"></span>
+    </div>
+  </div>
+
+  <div id="result-wrap"></div>
+</div>
+
+<script>
+function dzOver(e,k){e.preventDefault();document.getElementById('dz'+k).classList.add('over')}
+function dzLeave(k){document.getElementById('dz'+k).classList.remove('over')}
+function dzDrop(e,k){
+  e.preventDefault();dzLeave(k);
+  const f=e.dataTransfer.files[0];if(!f)return;
+  const inp=document.getElementById('f'+k);
+  const dt=new DataTransfer();dt.items.add(f);inp.files=dt.files;
+  onFileChange(parseInt(k),inp);
+}
+
+const state={path1:null,path2:null,label1:null,label2:null};
+let lastResult=null;
+
+async function uploadFiles(){
+  const f1=document.getElementById('f1').files[0];
+  const f2=document.getElementById('f2').files[0];
+  if(!f1||!f2)return;
+  const fd=new FormData();fd.append('file1',f1);fd.append('file2',f2);
+  const r=await fetch('/api/sheets',{method:'POST',body:fd});
+  const d=await r.json();
+  if(d.error){alert(d.error);return;}
+  state.path1=d.file1.path;state.label1=d.file1.name;
+  state.path2=d.file2.path;state.label2=d.file2.name;
+  const pref=['공종별집계표','공종별내역서'];
+  for(const[key,sel]of[['file1','sh1'],['file2','sh2']]){
+    const s=document.getElementById(sel);
+    s.disabled=false;
+    s.innerHTML=d[key].sheets.map(n=>`<option>${n}</option>`).join('');
+    for(const p of pref){const i=d[key].sheets.indexOf(p);if(i>=0){s.selectedIndex=i;break;}}
+  }
+  document.getElementById('btn-compare').disabled=false;
+}
+
+function onFileChange(num,inp){
+  if(!inp.files[0])return;
+  document.getElementById('fn'+num).textContent=(num===1?'① ':'② ')+inp.files[0].name;
+  uploadFiles();
+}
+
+async function runCompare(){
+  const s1=document.getElementById('sh1').value;
+  const s2=document.getElementById('sh2').value;
+  document.getElementById('result-wrap').innerHTML='<p style="color:#888;padding:20px;font-size:15px">비교 중…</p>';
+  document.getElementById('btn-dl').disabled=true;
+  document.getElementById('chips').style.display='none';
+  const r=await fetch('/api/compare',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({...state,sheet1:s1,sheet2:s2})
+  });
+  const d=await r.json();
+  if(d.error){alert(d.error);return;}
+  lastResult=d;
+  renderResult(d);
+  document.getElementById('btn-dl').disabled=false;
+  document.getElementById('chips').style.display='flex';
+  document.getElementById('chip-m').textContent='✓ 일치 '+d.summary.match;
+  document.getElementById('chip-a').textContent='＋ 추가 '+d.summary.add;
+  document.getElementById('chip-d').textContent='－ 삭제 '+d.summary.del;
+}
+
+function fmt(v){
+  if(v==null)return'-';
+  if(typeof v==='number')return v===0?'-':v.toLocaleString('ko-KR');
+  return v;
+}
+function fmtD(v){
+  if(v==null||v===0)return'-';
+  return(v>0?'+':'')+v.toLocaleString('ko-KR');
+}
+function fmtP(v){
+  if(v==null)return'';
+  return(v>=0?'+':'')+(v*100).toFixed(1)+'%';
+}
+
+function renderResult(d){
+  const l1=d.label1,l2=d.label2;
+  let html=`<div class="tbl-wrap"><table>
+    <thead>
+      <tr class="grp-header">
+        <th style="background:#374151;width:36px">L</th>
+        <th style="background:#374151;text-align:left">항목명</th>
+        <th colspan="4" style="background:#1f3864">① ${l1}</th>
+        <th colspan="4" style="background:#c55a11">② ${l2}</th>
+        <th style="background:#1a5c38">증감액</th>
+        <th style="background:#374151">비고</th>
+      </tr>
+      <tr class="sub-header">
+        <th style="background:#374151"></th>
+        <th style="background:#374151"></th>
+        <th style="background:#2c4f84">재료비</th>
+        <th style="background:#2c4f84">노무비</th>
+        <th style="background:#2c4f84">경비</th>
+        <th style="background:#2c4f84">합계</th>
+        <th style="background:#a04a0e">재료비</th>
+        <th style="background:#a04a0e">노무비</th>
+        <th style="background:#a04a0e">경비</th>
+        <th style="background:#a04a0e">합계</th>
+        <th style="background:#1f6b3e">(합계)</th>
+        <th style="background:#374151"></th>
+      </tr>
+    </thead><tbody>`;
+
+  for(const row of d.table){
+    const{type,level,name,mat1,lab1,exp1,tot1,mat2,lab2,exp2,tot2,diff,pct}=row;
+    const lv=level||2;
+    const cls=type==='add'?'row-add':type==='del'?'row-del':
+              diff>0?'row-up':diff<0?'row-dn':'row-eq';
+    const indent='　'.repeat(Math.max(0,lv-1));
+    const dc=diff>0?'pos':diff<0?'neg':'';
+    const badge=type==='add'?'<span class="badge badge-add">내역추가</span>':
+                type==='del'?'<span class="badge badge-del">내역삭제</span>':'';
+    html+=`<tr class="${cls} lv${lv}">
+      <td class="center">${lv}</td>
+      <td class="name-cell">${indent}${name}</td>
+      <td class="num">${fmt(mat1)}</td><td class="num">${fmt(lab1)}</td>
+      <td class="num">${fmt(exp1)}</td><td class="num">${fmt(tot1)}</td>
+      <td class="num">${fmt(mat2)}</td><td class="num">${fmt(lab2)}</td>
+      <td class="num">${fmt(exp2)}</td><td class="num">${fmt(tot2)}</td>
+      <td class="num ${dc}">${fmtD(diff)}</td>
+      <td class="center">${badge||fmtP(pct)}</td>
+    </tr>`;
+  }
+  html+='</tbody>';
+
+  if(d.grand1&&d.grand2){
+    const g1=d.grand1,g2=d.grand2;
+    const gd=g2.tot-g1.tot;
+    const gp=g1.tot?gd/g1.tot:0;
+    html+=`<tfoot><tr>
+      <td class="center">-</td><td>■ 공식 합계</td>
+      <td class="num">${fmt(g1.mat)}</td><td class="num">${fmt(g1.lab)}</td>
+      <td class="num">${fmt(g1.exp)}</td><td class="num">${fmt(g1.tot)}</td>
+      <td class="num">${fmt(g2.mat)}</td><td class="num">${fmt(g2.lab)}</td>
+      <td class="num">${fmt(g2.exp)}</td><td class="num">${fmt(g2.tot)}</td>
+      <td class="num ${gd>0?'pos':gd<0?'neg':''}">${fmtD(gd)}</td>
+      <td class="center">${fmtP(gp)}</td>
+    </tr></tfoot>`;
+  }
+  html+='</table></div>';
+  document.getElementById('result-wrap').innerHTML=html;
+}
+
+async function downloadExcel(){
+  if(!lastResult)return;
+  const r=await fetch('/api/download',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(lastResult)
+  });
+  if(!r.ok){alert('다운로드 실패');return;}
+  const blob=await r.blob();
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  const cd=r.headers.get('Content-Disposition')||'';
+  const m=cd.match(/filename\*?=(?:UTF-8'')?(.+)/i);
+  a.download=m?decodeURIComponent(m[1].replace(/['"]/g,'')):'비교결과.xlsx';
+  a.click();
+}
+</script>
+</body>
+</html>
