@@ -46,7 +46,8 @@ thead tr.grp-header th{padding:10px 10px;text-align:center;color:#fff;white-spac
 thead tr.sub-header th{padding:7px 10px;text-align:center;color:#fff;font-size:12px;white-space:nowrap}
 tbody tr:hover{filter:brightness(.96)}
 td{padding:9px 12px;border-bottom:1px solid #e0e8f4;vertical-align:middle;font-size:13px;white-space:nowrap}
-td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:'Courier New',monospace;font-size:13px;letter-spacing:-.3px}
+td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:'맑은 고딕',sans-serif;font-size:13px}
+td.divider{border-left:3px solid #888 !important}
 td.center{text-align:center}
 td.name-cell{white-space:normal;min-width:220px;max-width:360px;word-break:break-all;font-size:13px}
 .lv1 td{font-size:14px}.lv1 td.name-cell{font-weight:800}
@@ -57,7 +58,8 @@ tr.row-del td{background:#fef3c7}
 tr.row-up  td{background:#dcfce7}
 tr.row-dn  td{background:#fee2e2}
 tr.row-eq  td{background:#f9fafb}
-tfoot tr td{background:#dbeafe;font-weight:700;font-size:14px}
+tfoot tr td{background:#dbeafe;font-weight:700;font-size:13px}
+tfoot tr td.num{font-family:'맑은 고딕',sans-serif;font-size:13px;font-weight:700}
 .badge{display:inline-block;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:700;color:#fff}
 .badge-add{background:#1d4ed8}.badge-del{background:#c55a11}
 .neg{color:#b91c1c;font-weight:700}.pos{color:#166534;font-weight:700}
@@ -112,6 +114,7 @@ tfoot tr td{background:#dbeafe;font-weight:700;font-size:14px}
   <div class="action-bar">
     <button class="btn btn-primary" id="btn-compare" onclick="runCompare()" disabled>▶ 비교 실행</button>
     <button class="btn btn-dl" id="btn-dl" onclick="downloadExcel()" disabled>⬇ 엑셀 다운로드</button>
+    <button class="btn" style="background:#6b21a8;color:#fff" onclick="devPreview()">🔍 미리보기 (전/후)</button>
     <div class="summary-chips" id="chips" style="display:none">
       <span class="chip match" id="chip-m"></span>
       <span class="chip add"   id="chip-a"></span>
@@ -205,8 +208,8 @@ function renderResult(d){
         <th style="background:#374151;width:36px">L</th>
         <th style="background:#374151;text-align:left">항목명</th>
         <th colspan="4" style="background:#1f3864">① ${l1}</th>
-        <th colspan="4" style="background:#c55a11">② ${l2}</th>
-        <th style="background:#1a5c38">증감액</th>
+        <th colspan="4" style="background:#c55a11;border-left:3px solid #888">② ${l2}</th>
+        <th style="background:#1a5c38;border-left:3px solid #888">증감액</th>
         <th style="background:#374151">비고</th>
       </tr>
       <tr class="sub-header">
@@ -216,7 +219,7 @@ function renderResult(d){
         <th style="background:#2c4f84">노무비</th>
         <th style="background:#2c4f84">경비</th>
         <th style="background:#2c4f84">합계</th>
-        <th style="background:#a04a0e">재료비</th>
+        <th style="background:#a04a0e;border-left:3px solid #888">재료비</th>
         <th style="background:#a04a0e">노무비</th>
         <th style="background:#a04a0e">경비</th>
         <th style="background:#a04a0e">합계</th>
@@ -239,9 +242,9 @@ function renderResult(d){
       <td class="name-cell">${indent}${name}</td>
       <td class="num">${fmt(mat1)}</td><td class="num">${fmt(lab1)}</td>
       <td class="num">${fmt(exp1)}</td><td class="num">${fmt(tot1)}</td>
-      <td class="num">${fmt(mat2)}</td><td class="num">${fmt(lab2)}</td>
+      <td class="num divider">${fmt(mat2)}</td><td class="num">${fmt(lab2)}</td>
       <td class="num">${fmt(exp2)}</td><td class="num">${fmt(tot2)}</td>
-      <td class="num ${dc}">${fmtD(diff)}</td>
+      <td class="num divider">${fmtD(diff)}</td>
       <td class="center">${badge||fmtP(pct)}</td>
     </tr>`;
   }
@@ -255,14 +258,29 @@ function renderResult(d){
       <td class="center">-</td><td>■ 공식 합계</td>
       <td class="num">${fmt(g1.mat)}</td><td class="num">${fmt(g1.lab)}</td>
       <td class="num">${fmt(g1.exp)}</td><td class="num">${fmt(g1.tot)}</td>
-      <td class="num">${fmt(g2.mat)}</td><td class="num">${fmt(g2.lab)}</td>
+      <td class="num divider">${fmt(g2.mat)}</td><td class="num">${fmt(g2.lab)}</td>
       <td class="num">${fmt(g2.exp)}</td><td class="num">${fmt(g2.tot)}</td>
-      <td class="num ${gd>0?'pos':gd<0?'neg':''}">${fmtD(gd)}</td>
+      <td class="num divider ${gd>0?'pos':gd<0?'neg':''}">${fmtD(gd)}</td>
       <td class="center">${fmtP(gp)}</td>
     </tr></tfoot>`;
   }
   html+='</table></div>';
   document.getElementById('result-wrap').innerHTML=html;
+}
+
+async function devPreview(){
+  document.getElementById('result-wrap').innerHTML='<p style="color:#888;padding:20px;font-size:15px">미리보기 로딩 중…</p>';
+  document.getElementById('chips').style.display='none';
+  const r=await fetch('/api/dev_preview');
+  const d=await r.json();
+  if(d.error){alert(d.error);return;}
+  lastResult=d;
+  renderResult(d);
+  document.getElementById('btn-dl').disabled=false;
+  document.getElementById('chips').style.display='flex';
+  document.getElementById('chip-m').textContent='✓ 일치 '+d.summary.match;
+  document.getElementById('chip-a').textContent='＋ 추가 '+d.summary.add;
+  document.getElementById('chip-d').textContent='－ 삭제 '+d.summary.del;
 }
 
 async function downloadExcel(){

@@ -206,9 +206,47 @@ def build_excel(rows, grand1, grand2, label1, label2, sheet_name):
     return buf
 
 
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))  # 내역서검토/
+
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/api/dev_preview', methods=['GET'])
+def dev_preview():
+    """개발용: 전.xlsx / 후.xlsx 자동 비교"""
+    p1 = os.path.join(BASE_DIR, '전.xlsx')
+    p2 = os.path.join(BASE_DIR, '후.xlsx')
+    if not os.path.exists(p1) or not os.path.exists(p2):
+        return jsonify(error='전.xlsx / 후.xlsx 파일이 없습니다'), 404
+    wb1 = load_workbook(p1, data_only=True)
+    wb2 = load_workbook(p2, data_only=True)
+    sheet = '공종별집계표'
+    rows, grand1, grand2 = do_compare(wb1[sheet], wb2[sheet])
+    table = []
+    for rtype, it1, it2 in rows:
+        lv = (it2['level'] if it2 else (it1 or {}).get('level', 2)) or 2
+        name = it2['name'] if it2 else it1['name']
+        diff = (it2['tot'] - it1['tot']) if rtype == 'match' else \
+               (it2['tot'] if rtype == 'add' else -it1['tot'])
+        pct = diff / it1['tot'] if rtype == 'match' and it1['tot'] else None
+        table.append({
+            'type': rtype, 'level': lv, 'name': name,
+            'mat1': it1['mat'] if it1 else None, 'lab1': it1['lab'] if it1 else None,
+            'exp1': it1['exp'] if it1 else None, 'tot1': it1['tot'] if it1 else None,
+            'mat2': it2['mat'] if it2 else None, 'lab2': it2['lab'] if it2 else None,
+            'exp2': it2['exp'] if it2 else None, 'tot2': it2['tot'] if it2 else None,
+            'diff': diff, 'pct': pct,
+        })
+    return jsonify({
+        'table': table, 'grand1': grand1, 'grand2': grand2,
+        'summary': {
+            'match': sum(1 for r in rows if r[0]=='match'),
+            'add':   sum(1 for r in rows if r[0]=='add'),
+            'del':   sum(1 for r in rows if r[0]=='del'),
+        },
+        'label1': '전.xlsx', 'label2': '후.xlsx',
+    })
 
 @app.route('/api/sheets', methods=['POST'])
 def get_sheets():
