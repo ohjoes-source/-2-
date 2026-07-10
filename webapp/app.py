@@ -13,64 +13,155 @@ os.makedirs(UPLOAD, exist_ok=True)
 def norm(s):
     return re.sub(r'\s+', '', str(s)).lower()
 
+def norm_name(s):
+    return re.sub(r'[\s\-_\.\(\)\[\]①②③④⑤]', '', str(s)).lower()
+
 def detect_amount_cols(ws):
-    for row in ws.iter_rows(min_row=1, max_row=8, values_only=True):
+    """재료비/노무비/경비/합계 금액 컬럼 자동 탐지"""
+    best_single = None
+    for row in ws.iter_rows(min_row=1, max_row=10, values_only=True):
         cols = [i for i, c in enumerate(row)
                 if c and '금액' in re.sub(r'\s+', '', str(c))]
         if len(cols) >= 4:
             return cols[0], cols[1], cols[2], cols[3]
+        if len(cols) >= 1 and best_single is None:
+            best_single = cols[0]
+    if best_single is not None:
+        ci = best_single
+        return max(0, ci-3), max(0, ci-2), max(0, ci-1), ci
     return 5, 7, 9, 11
 
 def extract_items(ws):
     ci_mat, ci_lab, ci_exp, ci_tot = detect_amount_cols(ws)
     items = []; grand = None
-    for row in ws.iter_rows(min_row=5, max_row=ws.max_row, values_only=True):
-        raw = row[0]
-        if not raw: continue
+    # 데이터 시작행 자동탐지
+    data_start = 5
+    for ri, row in enumerate(ws.iter_rows(min_row=1, max_row=12, values_only=True), 1):
+        num_count = sum(1 for c in row if isinstance(c, (int, float)) and c != 0)
+        if num_count >= 2:
+            data_start = ri; break
+
+    for row in ws.iter_rows(min_row=data_start, max_row=ws.max_row, values_only=True):
+        if not row: continue
+        # 이름: 첫 번째 비어있지 않은 텍스트 셀
+        raw = None
+        for cell in row:
+            if cell and isinstance(cell, str) and len(str(cell).strip()) > 0:
+                raw = cell; break
+        if raw is None: continue
         name = str(raw).strip()
-        if ('합' in name and '계' in name and ('[' in name or '합     계' in name)):
-            if isinstance(row[ci_tot], (int, float)):
-                grand = {'mat': row[ci_mat] or 0, 'lab': row[ci_lab] or 0,
-                         'exp': row[ci_exp] or 0, 'tot': row[ci_tot] or 0}
+
+        # 합계행
+        nc = re.sub(r'\s+', '', name)
+        if '합' in nc and '계' in nc:
+            tot_val = row[ci_tot] if ci_tot < len(row) else None
+            if isinstance(tot_val, (int, float)) and abs(tot_val) > 0:
+                grand = {
+                    'mat': (row[ci_mat] if ci_mat < len(row) else None) or 0,
+                    'lab': (row[ci_lab] if ci_lab < len(row) else None) or 0,
+                    'exp': (row[ci_exp] if ci_exp < len(row) else None) or 0,
+                    'tot': tot_val,
+                }
             continue
-        if not isinstance(row[ci_tot], (int, float)): continue
-        m = re.match(r'^(\d{2,})\s+', name)
+
+        tot_val = row[ci_tot] if ci_tot < len(row) else None
+        if not isinstance(tot_val, (int, float)) or tot_val == 0: continue
+
+        # 코드 추출: 숫자 접두 or col[13]
+        m = re.match(r'^(\d{4,})\s+', name)
         if m:
-            code = m.group(1); level = len(code) // 2; clean = name[m.end():].strip()
+            code = m.group(1)
+            level = max(1, len(code) // 2)
+            display_name = name[m.end():].strip()
         else:
             code_cell = row[13] if len(row) > 13 else None
-            code = str(code_cell).strip() if code_cell else None
-            level = 2; clean = name
-        items.append({'name': clean, 'code': code, 'mat': row[ci_mat] or 0,
-                      'lab': row[ci_lab] or 0, 'exp': row[ci_exp] or 0,
-                      'tot': row[ci_tot] or 0, 'level': level})
+            code = str(code_cell).strip() if code_cell and str(code_cell).strip() not in ('', 'None') else None
+            level = 2
+            display_name = name
+
+        items.append({
+            'name': display_name,
+            'raw_name': name,
+            'code': code,
+            'mat': (row[ci_mat] if ci_mat < len(row) else None) or 0,
+            'lab': (row[ci_lab] if ci_lab < len(row) else None) or 0,
+            'exp': (row[ci_exp] if ci_exp < len(row) else None) or 0,
+            'tot': tot_val,
+            'level': level,
+        })
     return items, grand
+
+
+def _fuzzy_match(name1, name2):
+    n1 = norm_name(name1); n2 = norm_name(name2)
+    if not n1 or not n2: return False
+    short, long_ = (n1, n2) if len(n1) <= len(n2) else (n2, n1)
+    return len(short) >= 4 and short in long_
+
 
 def do_compare(ws1, ws2):
     items1, grand1 = extract_items(ws1)
     items2, grand2 = extract_items(ws2)
-    codes1 = {i['code'] for i in items1 if i['code']}
-    codes2 = {i['code'] for i in items2 if i['code']}
-    use_code = bool(codes1 and codes2)
-    if use_code:
-        map1 = {i['code']: i for i in items1}
-        key_fn = lambda it: it['code']
-    else:
-        map1 = {norm(i['name']): i for i in items1}
-        key_fn = lambda it: norm(it['name'])
-    result = []; used1 = set()
+
+    # 전략 판단
+    num_codes1 = {i['code'] for i in items1 if i['code'] and re.match(r'^\d{4,}$', str(i['code']))}
+    num_codes2 = {i['code'] for i in items2 if i['code'] and re.match(r'^\d{4,}$', str(i['code']))}
+    use_numcode = bool(num_codes1 & num_codes2)
+
+    str_codes1 = {i['code'] for i in items1 if i['code'] and not re.match(r'^\d{4,}$', str(i['code']))}
+    str_codes2 = {i['code'] for i in items2 if i['code'] and not re.match(r'^\d{4,}$', str(i['code']))}
+    use_strcode = bool(str_codes1 & str_codes2)
+
+    code_map1 = {}
+    if use_numcode:
+        code_map1 = {i['code']: i for i in items1 if i['code'] and re.match(r'^\d{4,}$', str(i['code']))}
+    elif use_strcode:
+        code_map1 = {i['code']: i for i in items1 if i['code']}
+
+    norm_map1 = {}
+    for i in items1:
+        k = norm(i['name'])
+        if k not in norm_map1: norm_map1[k] = i
+        rk = norm(i['raw_name'])
+        if rk not in norm_map1: norm_map1[rk] = i
+
+    used1 = set()  # item id (id(obj))
+
+    def find_match(it2):
+        # 코드 매칭
+        if it2['code'] and it2['code'] in code_map1:
+            it1 = code_map1[it2['code']]
+            if id(it1) not in used1:
+                used1.add(id(it1)); return it1
+        # 정규화 이름 매칭
+        for k in [norm(it2['name']), norm(it2['raw_name'])]:
+            if k and k in norm_map1:
+                it1 = norm_map1[k]
+                if id(it1) not in used1:
+                    used1.add(id(it1)); return it1
+        # 퍼지 매칭
+        for it1 in items1:
+            if id(it1) in used1: continue
+            if _fuzzy_match(it2['name'], it1['name']):
+                used1.add(id(it1)); return it1
+        return None
+
+    result = []
     for it2 in items2:
-        key = key_fn(it2)
-        if key and key in map1:
-            it1 = map1[key]; used1.add(key)
-            it1['level'] = it2['level']
+        it1 = find_match(it2)
+        if it1:
+            it1 = dict(it1); it1['level'] = it2['level']
             result.append(('match', it1, it2))
         else:
             result.append(('add', None, it2))
+
+    matched_ids = {id(r[1]) for r in result if r[0] == 'match'}
+    # items1에서 매칭 안 된 것 → 삭제
+    # (dict 복사 후 id가 바뀌므로 used1 기준으로 판단)
     for it1 in items1:
-        key = key_fn(it1)
-        if not key or key not in used1:
+        if id(it1) not in used1:
             result.append(('del', it1, None))
+
     return result, grand1, grand2
 
 def build_excel(rows, grand1, grand2, label1, label2, sheet_name):
