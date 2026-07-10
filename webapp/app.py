@@ -17,18 +17,42 @@ def norm_name(s):
     return re.sub(r'[\s\-_\.\(\)\[\]①②③④⑤]', '', str(s)).lower()
 
 def detect_amount_cols(ws):
-    """재료비/노무비/경비/합계 금액 컬럼 자동 탐지"""
-    best_single = None
-    for row in ws.iter_rows(min_row=1, max_row=10, values_only=True):
-        cols = [i for i, c in enumerate(row)
-                if c and '금액' in re.sub(r'\s+', '', str(c))]
-        if len(cols) >= 4:
-            return cols[0], cols[1], cols[2], cols[3]
-        if len(cols) >= 1 and best_single is None:
-            best_single = cols[0]
-    if best_single is not None:
-        ci = best_single
-        return max(0, ci-3), max(0, ci-2), max(0, ci-1), ci
+    """재료비/노무비/경비/합계 컬럼 자동 탐지
+    전체 스캔 후 우선순위: A(금액4개) > C(금액3개) > B(재료/노무) > D(금액1개) > E(합계만)
+    """
+    cand_A = cand_B = cand_C = None
+    single_d = tot_e = None
+
+    for row in ws.iter_rows(min_row=1, max_row=12, values_only=True):
+        n = [re.sub(r'\s+', '', str(c)).lower() if c else '' for c in row]
+        gumack = [i for i, v in enumerate(n) if '금액' in v]
+
+        if len(gumack) >= 4 and cand_A is None:
+            cand_A = (gumack[0], gumack[1], gumack[2], gumack[3])
+
+        if len(gumack) >= 3 and cand_C is None:
+            htot = next((i for i, v in enumerate(n) if '합계' in v and i not in gumack), None)
+            cand_C = (gumack[0], gumack[1], gumack[2], htot if htot else max(gumack) + 1)
+
+        mat = next((i for i, v in enumerate(n) if '재료' in v), None)
+        lab = next((i for i, v in enumerate(n) if '노무' in v), None)
+        exp = next((i for i, v in enumerate(n) if '경비' in v), None)
+        tot = next((i for i, v in enumerate(n) if i > 0 and '합계' in v and '소' not in v), None)
+        if mat is not None and lab is not None and tot is not None and cand_B is None:
+            cand_B = (mat, lab, exp if exp is not None else lab + 1, tot)
+
+        if len(gumack) == 1 and gumack[0] >= 4 and single_d is None:
+            single_d = gumack[0]
+        if tot is not None and mat is None and lab is None and tot_e is None:
+            tot_e = tot
+
+    if cand_A: return cand_A
+    if cand_C: return cand_C
+    if cand_B: return cand_B
+    if single_d:
+        ci = single_d; return max(0, ci-3), max(0, ci-2), max(0, ci-1), ci
+    if tot_e:
+        ci = tot_e; return max(0, ci-3), max(0, ci-2), max(0, ci-1), ci
     return 5, 7, 9, 11
 
 def extract_items(ws):
@@ -79,13 +103,14 @@ def extract_items(ws):
             level = 2
             display_name = name
 
+        def _n(v): return v if isinstance(v, (int, float)) else 0
         items.append({
             'name': display_name,
             'raw_name': name,
             'code': code,
-            'mat': (row[ci_mat] if ci_mat < len(row) else None) or 0,
-            'lab': (row[ci_lab] if ci_lab < len(row) else None) or 0,
-            'exp': (row[ci_exp] if ci_exp < len(row) else None) or 0,
+            'mat': _n(row[ci_mat] if ci_mat < len(row) else None),
+            'lab': _n(row[ci_lab] if ci_lab < len(row) else None),
+            'exp': _n(row[ci_exp] if ci_exp < len(row) else None),
             'tot': tot_val,
             'level': level,
         })
