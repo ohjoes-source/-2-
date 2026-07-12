@@ -153,39 +153,60 @@ def do_compare(ws1, ws2):
     used1 = set()  # item id (id(obj))
 
     def find_match(it2):
-        # 코드 매칭
         if it2['code'] and it2['code'] in code_map1:
             it1 = code_map1[it2['code']]
             if id(it1) not in used1:
                 used1.add(id(it1)); return it1
-        # 정규화 이름 매칭
         for k in [norm(it2['name']), norm(it2['raw_name'])]:
             if k and k in norm_map1:
                 it1 = norm_map1[k]
                 if id(it1) not in used1:
                     used1.add(id(it1)); return it1
-        # 퍼지 매칭
         for it1 in items1:
             if id(it1) in used1: continue
             if _fuzzy_match(it2['name'], it1['name']):
                 used1.add(id(it1)); return it1
         return None
 
-    result = []
-    for it2 in items2:
+    # 1단계: items2 전체에 대해 매칭 사전 계산
+    matches2 = []  # [(idx2, it2, matched_it1_or_None), ...]
+    for idx2, it2 in enumerate(items2):
         it1 = find_match(it2)
-        if it1:
-            it1 = dict(it1); it1['level'] = it2['level']
-            result.append(('match', it1, it2))
-        else:
-            result.append(('add', None, it2))
+        matches2.append((idx2, it2, it1))
 
-    matched_ids = {id(r[1]) for r in result if r[0] == 'match'}
-    # items1에서 매칭 안 된 것 → 삭제
-    # (dict 복사 후 id가 바뀌므로 used1 기준으로 판단)
+    # items1 id → items2 index 역매핑
+    id1_to_idx2 = {id(it1): idx2 for idx2, it2, it1 in matches2 if it1 is not None}
+
+    # 2단계: items1 순서를 기준으로 merge
+    # - matched items1 → 앞에 끼어있는 add(items2 전용) 항목 먼저 출력 → match 출력
+    # - unmatched items1 → del로 해당 위치에 출력
+    # 이렇게 하면 양쪽 시트의 원래 순서가 최대한 보존됨
+    result = []
+    next_idx2 = 0  # items2에서 다음으로 처리할 인덱스
+
     for it1 in items1:
-        if id(it1) not in used1:
+        if id(it1) in id1_to_idx2:
+            idx2 = id1_to_idx2[id(it1)]
+            it2 = items2[idx2]
+            # idx2 이전에 있는 미매칭 items2 항목(add)을 먼저 출력
+            while next_idx2 < idx2:
+                _, it2_pre, it1_pre = matches2[next_idx2]
+                if it1_pre is None:
+                    result.append(('add', None, it2_pre))
+                next_idx2 += 1
+            next_idx2 = idx2 + 1
+            it1_copy = dict(it1); it1_copy['level'] = it2['level']
+            result.append(('match', it1_copy, it2))
+        else:
+            # 삭제 항목: items1의 원래 위치에 출력
             result.append(('del', it1, None))
+
+    # 남은 items2 add 항목 후미 출력
+    while next_idx2 < len(matches2):
+        _, it2_rem, it1_rem = matches2[next_idx2]
+        if it1_rem is None:
+            result.append(('add', None, it2_rem))
+        next_idx2 += 1
 
     return result, grand1, grand2
 
