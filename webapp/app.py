@@ -23,7 +23,10 @@ def detect_amount_cols(ws):
     cand_A = cand_B = cand_C = None
     single_d = tot_e = None
 
-    for row in ws.iter_rows(min_row=1, max_row=12, values_only=True):
+    pa = get_print_area_bounds(ws)
+    hdr_start = pa[0] if pa else 1
+    hdr_end   = min(hdr_start + 11, pa[1] if pa else ws.max_row)
+    for row in ws.iter_rows(min_row=hdr_start, max_row=hdr_end, values_only=True):
         n = [re.sub(r'\s+', '', str(c)).lower() if c else '' for c in row]
         gumack = [i for i, v in enumerate(n) if '금액' in v]
 
@@ -55,17 +58,41 @@ def detect_amount_cols(ws):
         ci = tot_e; return max(0, ci-3), max(0, ci-2), max(0, ci-1), ci
     return 5, 7, 9, 11
 
+def get_print_area_bounds(ws):
+    """인쇄 영역의 (min_row, max_row) 반환. 없으면 None."""
+    pa = ws.print_area
+    if not pa:
+        return None
+    area = pa.split(',')[0].strip()
+    if '!' in area:
+        area = area.split('!')[1]
+    area = area.replace('$', '')
+    try:
+        from openpyxl.utils import range_boundaries
+        min_col, min_row, max_col, max_row = range_boundaries(area)
+        return min_row, max_row
+    except Exception:
+        return None
+
 def extract_items(ws):
     ci_mat, ci_lab, ci_exp, ci_tot = detect_amount_cols(ws)
     items = []; grand = None
-    # 데이터 시작행 자동탐지
-    data_start = 5
-    for ri, row in enumerate(ws.iter_rows(min_row=1, max_row=12, values_only=True), 1):
+
+    # 인쇄 영역이 있으면 해당 범위만, 없으면 전체 시트
+    pa = get_print_area_bounds(ws)
+    scan_start = pa[0] if pa else 1
+    scan_end   = pa[1] if pa else ws.max_row
+
+    # 데이터 시작행 자동탐지 (인쇄 영역 내에서)
+    data_start = scan_start + 4
+    for ri, row in enumerate(ws.iter_rows(min_row=scan_start,
+                                           max_row=min(scan_start + 11, scan_end),
+                                           values_only=True), scan_start):
         num_count = sum(1 for c in row if isinstance(c, (int, float)) and c != 0)
         if num_count >= 2:
             data_start = ri; break
 
-    for row in ws.iter_rows(min_row=data_start, max_row=ws.max_row, values_only=True):
+    for row in ws.iter_rows(min_row=data_start, max_row=scan_end, values_only=True):
         if not row: continue
         # 이름: 첫 번째 비어있지 않은 텍스트 셀
         raw = None
