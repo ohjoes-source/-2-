@@ -3,10 +3,12 @@ from openpyxl import load_workbook, Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-FILE1 = 'C:/Users/user/Desktop/내역서검토/전.xlsx'
-FILE2 = 'C:/Users/user/Desktop/내역서검토/후.xlsx'
+import os as _os
+_BASE = _os.path.dirname(_os.path.abspath(__file__))
+FILE1 = _os.path.join(_BASE, '전.xlsx')
+FILE2 = _os.path.join(_BASE, '후.xlsx')
 SHEET = '공종별집계표'
-OUT   = 'C:/Users/user/Desktop/내역서검토/공종별집계표_1대1비교(전후).xlsx'
+OUT   = _os.path.join(_BASE, '공종별집계표_1대1비교(전후).xlsx')
 
 wb1 = load_workbook(FILE1, data_only=True)
 wb2 = load_workbook(FILE2, data_only=True)
